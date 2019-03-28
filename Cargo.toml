@@ -1,0 +1,11 @@
+[package]
+name = "jift-term-x11"
+version = "0.1.0"
+authors = ["EEVV <0eevv0@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+
+[dependencies.x11]
+version = "*"
+features = ["xlib", "xft"]

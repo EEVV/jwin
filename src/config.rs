@@ -1,0 +1,1 @@
+pub const FONT: &'static str = "Fira Mono";
