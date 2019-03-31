@@ -1,7 +1,12 @@
 use crate::Code;
 
-// <FONT NAME>-<FONT SIZE>
-pub const FONT: &'static str = "Fira Mono-14";
+pub const FONTS_LEN: usize = 2;
+pub const FONTS: [&'static str; FONTS_LEN] = [
+    // normal font
+    "Fira Mono-14",
+    // bold font
+    "Fira Mono-14:bold"
+];
 
 pub const COLORS_LEN: usize = 2;
 // each color has 4 16 bit components.
@@ -14,7 +19,7 @@ pub const COLORS: [(u16, u16, u16, u16); COLORS_LEN] = [
 
 pub fn map_keystring(s: &str) -> Option<Code> {
     fn show(s: &str) -> Option<Code> {
-        Some(Code::Showable(s.to_string()))
+        Some(Code::Showable(s))
     }
 
     match s {
@@ -23,7 +28,11 @@ pub fn map_keystring(s: &str) -> Option<Code> {
         | "u" | "v" | "x" | "y" | "z" | "w" => show(s),
         "space" => show(" "),
         "BackSpace" => Some(Code::Backspace),
-        "Return" => Some(Code::Return),
+        "Return" => show("\n"),
+        "Left" => Some(Code::Left),
+        "Right" => Some(Code::Right),
+        "Up" => Some(Code::Up),
+        "Down" => Some(Code::Down),
         _ => None
     }
 }

@@ -13,28 +13,25 @@ use x11::xrender;
 mod config;
 
 #[derive(Debug)]
-pub enum Code {
-    Showable(String),
+pub enum Code<'a> {
+    Showable(&'a str),
     Backspace,
-    Return
+    Left,
+    Right,
+    Up,
+    Down
 }
 
 #[derive(Debug)]
-pub enum Event {
+pub enum Event<'a> {
     Redraw(usize, usize),
-    Key(Code),
+    Key(Code<'a>),
     Close
 }
 
 pub struct Win {
-    // used for selecting text
-    // might get removed
-    buffer: Vec<Vec<char>>,
-    buffer_width: usize,
-    buffer_height: usize,
-
-    width: usize,
-    height: usize,
+    buffer_width: usize, buffer_height: usize,
+    width: usize, height: usize,
 
     // xlib shit
     display: *mut xlib::Display,
@@ -46,7 +43,7 @@ pub struct Win {
     wm_delete_window: c_ulong,
 
     // xft shit
-    font: *mut xft::XftFont,
+    fonts: [*mut xft::XftFont; config::FONTS_LEN],
     draw: *mut xft::XftDraw,
     colors: [xft::XftColor; 2]
 }
@@ -89,10 +86,13 @@ impl Win {
             let mut protocols = [wm_delete_window];
             xlib::XSetWMProtocols(display, window, protocols.as_mut_ptr(), protocols.len() as c_int);
 
-            let font = xft::XftFontOpenName(display, screen, CString::new(config::FONT).ok()?.as_ptr());
-            if font.is_null() {
-                xlib::XCloseDisplay(display);
-                return None;
+            let mut fonts: [*mut xft::XftFont; config::FONTS_LEN] = mem::uninitialized();
+            for i in 0..config::FONTS_LEN {
+                fonts[i] = xft::XftFontOpenName(display, screen, CString::new(config::FONTS[i]).ok()?.as_ptr());
+                if fonts[i].is_null() {
+                    xlib::XCloseDisplay(display);
+                    return None;
+                }
             }
 
             let draw = xft::XftDrawCreate(
@@ -126,9 +126,8 @@ impl Win {
             }
 
             let win = Win {
-                buffer: vec![],
-                width: 0, height: 0,
                 buffer_width: 0, buffer_height: 0,
+                width: 0, height: 0,
 
                 display: display,
                 visual: visual,
@@ -137,7 +136,7 @@ impl Win {
                 wm_protocols: wm_protocols,
                 wm_delete_window: wm_delete_window,
 
-                font: font,
+                fonts: fonts,
                 draw: draw,
                 colors: colors
             };
@@ -148,8 +147,6 @@ impl Win {
     fn resize_buffer(&mut self, w: usize, h: usize) {
         self.buffer_width = w;
         self.buffer_height = h;
-
-        self.buffer = vec![vec![' '; w]; h];
     }
 
     unsafe fn update_dimensions(&mut self) {
@@ -173,34 +170,13 @@ impl Win {
         self.width = c_width as usize;
         self.height = c_height as usize;
 
-        let width = self.width / ((*self.font).max_advance_width as usize);
-        let height = self.height / ((*self.font).height as usize);
+        let width = self.width / ((*self.fonts[0]).max_advance_width as usize);
+        let height = self.height / ((*self.fonts[0]).height as usize);
 
         self.resize_buffer(width, height);
     }
 
-    pub fn redraw(&mut self) {
-        unsafe {
-            let mut y = 1;
-
-            for line in &self.buffer {
-                let line_string: String = line.into_iter().collect();
-
-                xft::XftDrawString8(
-                    self.draw,
-                    &self.colors[1],
-                    self.font,
-                    0, y * (*self.font).height,
-                    CString::new(line_string).unwrap().as_ptr() as *const u8,
-                    line.len() as i32
-                );
-
-                y += 1;
-            }
-        }
-    }
-
-    pub fn poll(&mut self) -> Option<Event> {
+    pub fn poll<'a, 'b: 'a>(&'a mut self) -> Option<Event<'b>> {
         unsafe {
             let mut event = mem::uninitialized();
             xlib::XNextEvent(self.display, &mut event);
@@ -208,7 +184,6 @@ impl Win {
             match event.get_type() {
                 xlib::Expose => {
                     self.update_dimensions();
-                    self.redraw();
 
                     return Some(Event::Redraw(self.buffer_width, self.buffer_height));
                 },
@@ -236,43 +211,35 @@ impl Win {
         return None;
     }
 
-    pub fn put_string(&mut self, x: usize, y: usize, string: String) {
+    pub fn put_str(&mut self, x: usize, y: usize, string: &str, i: usize) {
         if self.buffer_height <= y {
             return;
         }
 
-        let start = x;
         let end = cmp::min(self.buffer_width, string.len() + x);
-        let range = start..end;
-
-        let mut curr_x = start;
-        for chr in string.chars() {
-            if !range.contains(&curr_x) {
-                break;
-            }
-            self.buffer[y][curr_x] = chr;
-
-            curr_x += 1;
+        let len = (end as i32) - (x as i32);
+        if len < 0 {
+            return;
         }
 
-        let len = (end - start) as i32;
-
         unsafe {
-            let x_pos = (x as i32) * (*self.font).max_advance_width;
-            let y_pos = (y as i32) * (*self.font).height;
+            let x_pos = (x as i32) * (*self.fonts[0]).max_advance_width;
+            let y_pos = (y as i32) * (*self.fonts[0]).height;
+
+            let font = self.fonts[i];
 
             xft::XftDrawRect(
                 self.draw,
                 &self.colors[0],
-                x_pos, y_pos + (*self.font).descent,
-                (len * (*self.font).max_advance_width) as u32, (*self.font).height as u32
+                x_pos, y_pos + (*font).descent,
+                (len * (*font).max_advance_width) as u32, (*self.fonts[0]).height as u32
             );
 
             xft::XftDrawString8(
                 self.draw,
                 &self.colors[1],
-                self.font,
-                x_pos, y_pos + (*self.font).height,
+                self.fonts[i],
+                x_pos, y_pos + (*font).height,
                 CString::new(string).unwrap().as_ptr() as *const u8,
                 len
             );
