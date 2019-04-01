@@ -176,7 +176,7 @@ impl Win {
         self.resize_buffer(width, height);
     }
 
-    pub fn poll<'a, 'b: 'a>(&'a mut self) -> Option<Event<'b>> {
+    pub fn poll<'a, 'b>(&'a mut self) -> Option<Event<'b>> {
         unsafe {
             let mut event = mem::uninitialized();
             xlib::XNextEvent(self.display, &mut event);
@@ -188,7 +188,12 @@ impl Win {
                     return Some(Event::Redraw(self.buffer_width, self.buffer_height));
                 },
                 xlib::KeyPress => {
-                    let keysym = xlib::XKeycodeToKeysym(self.display, event.key.keycode as u8, 0);
+                    // i hate x11... had to figure this out by bruteforce more or less
+                    if event.key.state != 0 && event.key.state != 1 {
+                        return None;
+                    }
+
+                    let keysym = xlib::XkbKeycodeToKeysym(self.display, event.key.keycode as u8, 0, event.key.state as i32);
                     let string = CStr::from_ptr(xlib::XKeysymToString(keysym)).to_str().unwrap();
 
                     return Some(Event::Key(config::map_keystring(string)?));
