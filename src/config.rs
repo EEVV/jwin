@@ -8,13 +8,25 @@ pub const FONTS: [&'static str; FONTS_LEN] = [
     "Fira Mono-14:bold"
 ];
 
-pub const COLORS_LEN: usize = 2;
+pub const COLORS_LEN: usize = 8;
 // each color has 4 16 bit components.
 pub const COLORS: [(u16, u16, u16, u16); COLORS_LEN] = [
-    // background color
+    // black
     (0x0000, 0x0000, 0x0000, 0xffff),
-    // foreground default color
-    (0xffff, 0xffff, 0xffff, 0xffff)
+    // white
+    (0xffff, 0xffff, 0xffff, 0xffff),
+    // red
+    (0xffff, 0x8fff, 0x8fff, 0xffff),
+    // yellow
+    (0xffff, 0xffff, 0x8fff, 0xffff),
+    // green
+    (0x8fff, 0xffff, 0x8fff, 0xffff),
+    // cyan
+    (0x8fff, 0xffff, 0xffff, 0xffff),
+    // blue
+    (0x8fff, 0x8fff, 0xffff, 0xffff),
+    // pink
+    (0xffff, 0x8fff, 0xffff, 0xffff)
 ];
 
 pub fn map_keystring(s: &str) -> Option<Code> {

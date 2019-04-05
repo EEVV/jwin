@@ -11,6 +11,10 @@ fn main() {
 
     let mut cursor_x = 0;
 
+    win.set_bg(0);
+    win.set_fg(1);
+    win.set_font(0);
+
     loop {
         match win.poll() {
             Some(x) => match x {
@@ -21,7 +25,7 @@ fn main() {
                         match chr {
                             '\n' => (),
                             _ => {
-                                win.put_str(cursor_x, 0, string, 0);
+                                win.put_char(cursor_x, 0, chr);
                                 cursor_x += 1;
                             }
                         }
@@ -30,7 +34,7 @@ fn main() {
                 Event::Key(Code::Backspace) => {
                     if cursor_x != 0 {
                         cursor_x -= 1;
-                        win.put_str(cursor_x, 0, " ", 0);
+                        win.put_char(cursor_x, 0, ' ');
                     }
                 },
                 Event::Close => return,

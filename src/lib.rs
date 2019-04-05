@@ -32,6 +32,8 @@ pub enum Event<'a> {
 pub struct Win {
     buffer_width: usize, buffer_height: usize,
     width: usize, height: usize,
+    // current attributes
+    fg: usize, bg: usize, font: usize,
 
     // xlib shit
     display: *mut xlib::Display,
@@ -45,7 +47,7 @@ pub struct Win {
     // xft shit
     fonts: [*mut xft::XftFont; config::FONTS_LEN],
     draw: *mut xft::XftDraw,
-    colors: [xft::XftColor; 2]
+    colors: [xft::XftColor; config::COLORS_LEN]
 }
 
 impl Win {
@@ -106,7 +108,7 @@ impl Win {
                 return None;
             }
 
-            let mut colors: [xft::XftColor; 2] = mem::uninitialized();
+            let mut colors: [xft::XftColor; config::COLORS_LEN] = mem::uninitialized();
 
             for i in 0..config::COLORS_LEN {
                 let (r, g, b, a) = config::COLORS[i];
@@ -128,6 +130,7 @@ impl Win {
             let win = Win {
                 buffer_width: 0, buffer_height: 0,
                 width: 0, height: 0,
+                fg: 0, bg: 0, font: 0,
 
                 display: display,
                 visual: visual,
@@ -216,7 +219,69 @@ impl Win {
         return None;
     }
 
-    pub fn put_str(&mut self, x: usize, y: usize, string: &str, i: usize) {
+    pub fn clear(&self) {
+        unsafe {
+            xlib::XClearWindow(self.display, self.window);
+        }
+    }
+
+    pub fn flush(&self) {
+        unsafe {
+            xlib::XFlush(self.display);
+        }
+    }
+
+    pub fn set_fg(&mut self, fg: usize) {
+        self.fg = fg % config::COLORS_LEN;
+    }
+
+    pub fn set_bg(&mut self, bg: usize) {
+        self.bg = bg % config::COLORS_LEN;
+    }
+
+    pub fn set_font(&mut self, font: usize) {
+        assert!(font < config::FONTS_LEN, "font index out of bounds");
+        self.font = font;
+    }
+
+    pub fn put_char(&mut self, x: usize, y: usize, chr: char) {
+        if self.buffer_height <= y {
+            return;
+        }
+
+        let end = cmp::min(self.buffer_width, x + 1);
+        let len = (end as i32) - (x as i32);
+        if len < 0 {
+            return;
+        }
+
+        unsafe {
+            let x_pos = (x as i32) * (*self.fonts[0]).max_advance_width;
+            let y_pos = (y as i32) * (*self.fonts[0]).height;
+
+            let font = self.fonts[self.font];
+
+            xft::XftDrawRect(
+                self.draw,
+                &self.colors[self.bg],
+                x_pos, y_pos + (*font).descent,
+                (len * (*font).max_advance_width) as u32, (*self.fonts[0]).height as u32
+            );
+
+            xft::XftDrawString8(
+                self.draw,
+                &self.colors[self.fg],
+                font,
+                x_pos, y_pos + (*font).height,
+                // hacky af?
+                (&chr as *const char) as *const u8,
+                len
+            );
+        }
+
+    }
+
+    pub fn put_str(&mut self, x: usize, y: usize, string: &str) {
         if self.buffer_height <= y {
             return;
         }
@@ -231,19 +296,19 @@ impl Win {
             let x_pos = (x as i32) * (*self.fonts[0]).max_advance_width;
             let y_pos = (y as i32) * (*self.fonts[0]).height;
 
-            let font = self.fonts[i];
+            let font = self.fonts[self.font];
 
             xft::XftDrawRect(
                 self.draw,
-                &self.colors[0],
+                &self.colors[self.bg],
                 x_pos, y_pos + (*font).descent,
                 (len * (*font).max_advance_width) as u32, (*self.fonts[0]).height as u32
             );
 
             xft::XftDrawString8(
                 self.draw,
-                &self.colors[1],
-                self.fonts[i],
+                &self.colors[self.fg],
+                font,
                 x_pos, y_pos + (*font).height,
                 CString::new(string).unwrap().as_ptr() as *const u8,
                 len
